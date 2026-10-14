@@ -137,7 +137,8 @@ class LauncherRestartActivity : BaseActivity() {
             mainHandler.postDelayed({ hideSystemUI() }, 360L)
             mainHandler.postDelayed({
                 hideSystemUI()
-                startActivity(Intent(this, MainActivity::class.java).apply {
+                // Volta para a interface do Laux (entrada LAUNCHER), não para a Activity original.
+                startActivity(Intent(this, com.codeoneditor.app.MainActivity::class.java).apply {
                     addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK or
                             Intent.FLAG_ACTIVITY_NO_ANIMATION

@@ -34,6 +34,11 @@ import com.codeoneditor.app.runtime.RuntimeCompatibility
 import com.codeoneditor.app.runtime.RuntimeBootstrapper
 import com.codeoneditor.app.runtime.NativeRuntimeBridge
 import com.codeoneditor.app.runtime.RuntimeIsolationManager
+import org.levimc.launcher.core.minecraft.ACTION_MAIN_ACTIVITY_FIRST_DRAWN
+import org.levimc.launcher.core.minecraft.EXTRA_CLOSE_RESTART_ACTIVITY_ON_FIRST_DRAW
+import org.levimc.launcher.preloader.PreloaderSignatureRulesManager
+import org.levimc.launcher.util.LauncherStorage
+import android.view.ViewTreeObserver
 import java.io.File
 
 private val Background = Color(0xFF090909)
@@ -46,6 +51,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        bootstrapLauncherStorage()
+        closeRestartActivityAfterFirstDraw()
         setContent {
             MyApplicationTheme(darkTheme = true) {
                 MaterialTheme(
@@ -60,6 +67,39 @@ class MainActivity : ComponentActivity() {
                 ) { LauncherApp() }
             }
         }
+    }
+
+    /**
+     * Mesmo aquecimento que o SplashActivity original fazia antes de chegar à tela principal.
+     * Este Activity agora é a entrada LAUNCHER, então precisa executá-lo sozinho.
+     */
+    private fun bootstrapLauncherStorage() {
+        val appContext = applicationContext
+        Thread({
+            runCatching { LauncherStorage.ensureNoMedia(appContext) }
+        }, "launcher-storage-warmup").start()
+        runCatching { PreloaderSignatureRulesManager.refreshOnLauncherStart(appContext) }
+    }
+
+    /**
+     * Após o jogo fechar, LauncherRestartActivity espera o broadcast ACTION_MAIN_ACTIVITY_FIRST_DRAWN
+     * para se encerrar. Só a Activity original o enviava; sem isso a tela de reinício ficava presa.
+     */
+    private fun closeRestartActivityAfterFirstDraw() {
+        if (!intent.getBooleanExtra(EXTRA_CLOSE_RESTART_ACTIVITY_ON_FIRST_DRAW, false)) return
+        intent.removeExtra(EXTRA_CLOSE_RESTART_ACTIVITY_ON_FIRST_DRAW)
+        val root = window.decorView
+        root.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (root.viewTreeObserver.isAlive) {
+                    root.viewTreeObserver.removeOnPreDrawListener(this)
+                }
+                root.post {
+                    sendBroadcast(Intent(ACTION_MAIN_ACTIVITY_FIRST_DRAWN).setPackage(packageName))
+                }
+                return true
+            }
+        })
     }
 }
 
@@ -185,7 +225,10 @@ private fun LauncherApp() {
                     onPlay = {
                         runCatching {
                             val manager = org.levimc.launcher.core.versions.VersionManager.get(context)
-                            val isolatedVersion = manager.customVersions.firstOrNull()
+                            // Respeita a versão escolhida pelo usuário; nunca lança a instalação oficial.
+                            val selectedCustomDir = manager.getSelectedVersion()?.takeIf { !it.isInstalled }?.versionDir
+                            val isolatedVersion = manager.customVersions.firstOrNull { it.versionDir == selectedCustomDir }
+                                ?: manager.customVersions.firstOrNull()
                             if (isolatedVersion == null) {
                                 val report = runtimeCompatibility.inspect()
                                 installed = report.officialMinecraftInstalled
