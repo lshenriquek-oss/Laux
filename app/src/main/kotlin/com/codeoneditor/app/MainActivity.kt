@@ -223,31 +223,44 @@ private fun LauncherApp() {
             when (page) {
                 LauncherPage.HOME -> HomePage(
                     onPlay = {
-                        runCatching {
-                            val manager = org.levimc.launcher.core.versions.VersionManager.get(context)
-                            // Respeita a versão escolhida pelo usuário; nunca lança a instalação oficial.
-                            val selectedCustomDir = manager.getSelectedVersion()?.takeIf { !it.isInstalled }?.versionDir
-                            val isolatedVersion = manager.customVersions.firstOrNull { it.versionDir == selectedCustomDir }
-                                ?: manager.customVersions.firstOrNull()
-                            if (isolatedVersion == null) {
-                                val report = runtimeCompatibility.inspect()
-                                installed = report.officialMinecraftInstalled
-                                message = "Nenhuma versão privada importada pelo gerenciador foi encontrada. O APK selecionado em Configurações foi apenas preparado, não registrado como versão jogável. Importe uma versão em Gerenciar conteúdo e tente novamente."
-                            } else {
-                                isolatedVersion.versionIsolation = true
-                                manager.selectVersion(isolatedVersion)
-                                org.levimc.launcher.core.minecraft.MinecraftLauncher(context)
-                                    .launch(Intent(), isolatedVersion, object : org.levimc.launcher.core.minecraft.MinecraftLauncher.LaunchCallback {
-                                        override fun onLaunchStarted() {
-                                            (context as? android.app.Activity)?.runOnUiThread { message = "Inicialização solicitada para ${isolatedVersion.displayName}, com isolamento por versão ativado." }
-                                        }
-                                        override fun onLaunchFailed(e: Exception) {
-                                            (context as? android.app.Activity)?.runOnUiThread { message = "Não foi possível iniciar a versão isolada: ${e.message ?: e.javaClass.simpleName}" }
-                                        }
-                                    })
+                        val activity = context as? android.app.Activity
+                        if (activity == null) {
+                            message = "Não foi possível iniciar: contexto sem Activity."
+                        } else {
+                            runCatching {
+                                val manager = org.levimc.launcher.core.versions.VersionManager.get(activity)
+                                // Mesma ordem do launcher original: selecionada → instalada → importada.
+                                val version = manager.selectedVersion
+                                    ?: manager.installedVersions.firstOrNull()
+                                    ?: manager.customVersions.firstOrNull()
+                                if (version == null) {
+                                    message = "Nenhuma versão do Minecraft encontrada. Instale o Minecraft pela Play Store."
+                                } else if (!org.levimc.launcher.util.PlayStoreValidator.isMinecraftFromPlayStore(activity)) {
+                                    org.levimc.launcher.ui.dialogs.PlayStoreValidationDialog.showNotFromPlayStoreDialog(activity)
+                                    message = "O Minecraft instalado não foi verificado como versão da Play Store."
+                                } else {
+                                    // Isolamento só para versões importadas; a instalação oficial usa o perfil dela.
+                                    if (!version.isInstalled) version.versionIsolation = true
+                                    val trace = org.levimc.launcher.core.minecraft.LaunchTrace.create(null)
+                                    trace.milestone("Launch requested")
+                                    val launchIntent = Intent()
+                                    launchIntent.putExtra(
+                                        org.levimc.launcher.core.minecraft.LaunchTrace.EXTRA_SESSION_ID,
+                                        trace.sessionId
+                                    )
+                                    org.levimc.launcher.core.minecraft.MinecraftLauncher(activity)
+                                        .launch(launchIntent, version, object : org.levimc.launcher.core.minecraft.MinecraftLauncher.LaunchCallback {
+                                            override fun onLaunchStarted() {
+                                                activity.runOnUiThread { message = "Abrindo ${version.displayName}..." }
+                                            }
+                                            override fun onLaunchFailed(e: Exception) {
+                                                activity.runOnUiThread { message = "Não foi possível iniciar: ${e.message ?: e.javaClass.simpleName}" }
+                                            }
+                                        })
+                                }
+                            }.onFailure { error ->
+                                message = "Falha ao preparar a inicialização: ${error.message ?: error.javaClass.simpleName}"
                             }
-                        }.onFailure { error ->
-                            message = "Falha ao preparar a inicialização isolada: ${error.message ?: error.javaClass.simpleName}"
                         }
                     },
                     onMods = { page = LauncherPage.MODS },
