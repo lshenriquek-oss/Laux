@@ -43,8 +43,8 @@ android {
         applicationId "com.codeoneditor.app"
         minSdkVersion 28
         targetSdkVersion 35
-        versionCode 116
-        versionName "0.116"
+        versionCode 118
+        versionName "0.118"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "CURSEFORGE_API_KEY", "\"${localProperties.getProperty('curseforge.api_key', '')}\""
         ndk {

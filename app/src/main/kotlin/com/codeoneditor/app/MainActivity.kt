@@ -233,7 +233,7 @@ private fun LauncherApp() {
                 }
             }
             Spacer(Modifier.weight(1f))
-            Text("LAUX • 0.116", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
+            Text("LAUX • 0.117", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
         }
 
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -229,8 +229,18 @@ object MinecraftRuntimePreparer {
         trace.mark("Minecraft library loading started")
 
         if (shouldLoadHttpClient(version)) {
+            // Preload the shared C++ runtime, but do not manually load HttpClient.Android here.
+            // On the user's Samsung/Android device, its JNI initialization registers the Xbox
+            // NetworkObserver and repeatedly aborts the whole app with:
+            // FORTIFY: pthread_mutex_lock called on a destroyed mutex.
+            // Let Android's native linker load HttpClient.Android when Minecraft's native
+            // dependency graph actually needs it, avoiding this premature explicit load.
             loadLibrary(gameManager, "c++_shared", 48, true, listener, trace)
-            loadLibrary(gameManager, "HttpClient.Android", 52, true, listener, trace)
+            trace.mark(
+                "HttpClient.Android preload deferred",
+                "Allow native linker to load it with Minecraft dependencies"
+            )
+            listener.onLog("Deferring HttpClient.Android to native dependency loading")
         }
 
         if (shouldLoadMaesdk(version)) {

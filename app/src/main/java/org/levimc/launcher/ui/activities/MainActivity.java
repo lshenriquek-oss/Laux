@@ -128,10 +128,13 @@ import okhttp3.OkHttpClient;
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         if (lauxLaunchOnly) {
-            // Keep the view hierarchy alive because the existing launch pipeline depends on it,
-            // but do not expose the reference launcher's interface to Laux users.
+            // Keep the view hierarchy alive for the original engine, but make the host window
+            // transparent and non-interactive so no reference-launcher frame can flash on screen.
             binding.getRoot().setVisibility(View.INVISIBLE);
+            binding.getRoot().setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
             getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            getWindow().setDimAmount(0f);
+            getWindow().setWindowAnimations(0);
         }
         closeLauncherRestartAfterFirstDraw();
         setupNavBar();
