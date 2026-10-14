@@ -106,12 +106,12 @@ public final class ExternalModsAdapter extends RecyclerView.Adapter<ExternalMods
         }
 
         Object iconSource = TextUtils.isEmpty(mod.iconUrl)
-                ? R.drawable.ic_leaf_logo
+                ? R.drawable.ic_minecraft_cube
                 : mod.iconUrl;
         Glide.with(holder.icon)
                 .load(iconSource)
-                .placeholder(R.drawable.ic_leaf_logo)
-                .error(R.drawable.ic_leaf_logo)
+                .placeholder(R.drawable.ic_minecraft_cube)
+                .error(R.drawable.ic_minecraft_cube)
                 .into(holder.icon);
 
         boolean canInstall = release != null && compatible != null && !minecraftVersion.isEmpty() && !isBusy;

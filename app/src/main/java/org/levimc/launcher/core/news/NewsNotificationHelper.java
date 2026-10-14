@@ -53,7 +53,7 @@ public final class NewsNotificationHelper {
         );
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notification_leaf)
+                .setSmallIcon(R.drawable.ic_notification_launcher)
                 .setColor(ContextCompat.getColor(context, R.color.primary))
                 .setContentTitle(title)
                 .setContentText(body)

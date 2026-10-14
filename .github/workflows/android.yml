@@ -88,15 +88,13 @@ jobs:
           java-version: "21"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@v3
 
       - name: Install Android SDK components
         shell: bash
         run: |
           set -euo pipefail
-          set +o pipefail
           yes | sdkmanager --licenses >/dev/null
-          set -o pipefail
           sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
 
       - name: Build debug APK
@@ -118,7 +116,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Launcher-0.112-debug-apk
+          name: Launcher-0.113-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

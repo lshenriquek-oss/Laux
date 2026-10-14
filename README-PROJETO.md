@@ -1,4 +1,4 @@
-# Launcher 0.112 — interface integrada e runtime
+# Launcher 0.113 — interface integrada e runtime
 
 A atividade inicial agora usa a interface personalizada preservada em `app/src/main/kotlin/com/codeoneditor/app/`, com tema escuro e sem emojis. O runtime de LeviLaunchroid permanece como base do carregador.
 

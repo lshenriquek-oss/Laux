@@ -120,7 +120,7 @@ class MinecraftForegroundService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_leaf_logo_mono)
+            .setSmallIcon(R.drawable.ic_notification_launcher)
             .setContentTitle(getString(R.string.foreground_service_notification_title))
             .setContentText(getString(R.string.foreground_service_notification_text))
             .setContentIntent(contentIntent)

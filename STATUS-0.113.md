@@ -1,4 +1,4 @@
-# Launcher 0.112 — integração da interface
+# Launcher 0.113 — integração da interface
 
 ## Feito nesta versão
 - A atividade inicial do aplicativo aponta para a interface personalizada, não para a tela padrão do LeviLaunchroid.
@@ -6,7 +6,10 @@
 - Dependências e plugin do Jetpack Compose foram adicionados ao Gradle.
 - O botão Jogar tenta iniciar uma versão personalizada já registrada no gerenciador, marcando `versionIsolation = true`.
 - Se não existir versão privada registrada, o launcher bloqueia a abertura acidental da instalação oficial e mostra uma mensagem de orientação.
-- A numeração do app e do artefato foi incrementada para 0.112.
+- O código e o nome de versão Android foram incrementados para 113 e 0.113.
+- O nome do artefato gerado pelo GitHub Actions foi atualizado para Launcher-0.113-debug-apk.
+- Os arquivos ativos exclusivos do editor foram removidos após cópia de segurança.
+- Os recursos ativos do ícone foram substituídos pela identidade visual de bloco de grama.
 
 ## Ainda precisa ser confirmado
 - Build real no GitHub Actions.
