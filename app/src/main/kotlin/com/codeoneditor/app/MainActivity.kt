@@ -227,39 +227,18 @@ private fun LauncherApp() {
                         if (activity == null) {
                             message = "Não foi possível iniciar: contexto sem Activity."
                         } else {
+                            // Reutiliza o fluxo de inicialização testado pelo launcher original.
+                            // A tela Compose é encerrada antes de carregar as bibliotecas nativas do jogo,
+                            // evitando manter duas interfaces aceleradas por hardware durante a inicialização.
                             runCatching {
-                                val manager = org.levimc.launcher.core.versions.VersionManager.get(activity)
-                                // Mesma ordem do launcher original: selecionada → instalada → importada.
-                                val version = manager.selectedVersion
-                                    ?: manager.installedVersions.firstOrNull()
-                                    ?: manager.customVersions.firstOrNull()
-                                if (version == null) {
-                                    message = "Nenhuma versão do Minecraft encontrada. Instale o Minecraft pela Play Store."
-                                } else if (!org.levimc.launcher.util.PlayStoreValidator.isMinecraftFromPlayStore(activity)) {
-                                    org.levimc.launcher.ui.dialogs.PlayStoreValidationDialog.showNotFromPlayStoreDialog(activity)
-                                    message = "O Minecraft instalado não foi verificado como versão da Play Store."
-                                } else {
-                                    // Isolamento só para versões importadas; a instalação oficial usa o perfil dela.
-                                    if (!version.isInstalled) version.versionIsolation = true
-                                    val trace = org.levimc.launcher.core.minecraft.LaunchTrace.create(null)
-                                    trace.milestone("Launch requested")
-                                    val launchIntent = Intent()
-                                    launchIntent.putExtra(
-                                        org.levimc.launcher.core.minecraft.LaunchTrace.EXTRA_SESSION_ID,
-                                        trace.sessionId
-                                    )
-                                    org.levimc.launcher.core.minecraft.MinecraftLauncher(activity)
-                                        .launch(launchIntent, version, object : org.levimc.launcher.core.minecraft.MinecraftLauncher.LaunchCallback {
-                                            override fun onLaunchStarted() {
-                                                activity.runOnUiThread { message = "Abrindo ${version.displayName}..." }
-                                            }
-                                            override fun onLaunchFailed(e: Exception) {
-                                                activity.runOnUiThread { message = "Não foi possível iniciar: ${e.message ?: e.javaClass.simpleName}" }
-                                            }
-                                        })
-                                }
+                                val launchIntent = Intent(
+                                    activity,
+                                    org.levimc.launcher.ui.activities.MainActivity::class.java
+                                ).putExtra("LAUNCH_WITH_URI", true)
+                                activity.startActivity(launchIntent)
+                                activity.finish()
                             }.onFailure { error ->
-                                message = "Falha ao preparar a inicialização: ${error.message ?: error.javaClass.simpleName}"
+                                message = "Falha ao abrir o inicializador do Minecraft: ${error.message ?: error.javaClass.simpleName}"
                             }
                         }
                     },
