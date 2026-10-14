@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,6 +41,7 @@ import org.levimc.launcher.core.minecraft.ACTION_MAIN_ACTIVITY_FIRST_DRAWN
 import org.levimc.launcher.core.minecraft.EXTRA_CLOSE_RESTART_ACTIVITY_ON_FIRST_DRAW
 import org.levimc.launcher.preloader.PreloaderSignatureRulesManager
 import org.levimc.launcher.util.LauncherStorage
+import org.levimc.launcher.R
 import android.view.ViewTreeObserver
 import java.io.File
 
@@ -118,6 +122,7 @@ private fun LauncherApp() {
     var page by remember { mutableStateOf(LauncherPage.HOME) }
     var message by remember { mutableStateOf("Pronto para configurar seu Minecraft.") }
     var importedPacks by remember { mutableStateOf(listOf<String>()) }
+    var exportPackName by remember { mutableStateOf<String?>(null) }
     var installed by remember { mutableStateOf(false) }
     val runtimeStorage = remember(context) { RuntimeStorage(context) }
     val runtimeCompatibility = remember(context) { RuntimeCompatibility(context) }
@@ -158,6 +163,27 @@ private fun LauncherApp() {
         }
     }
 
+    val exportPack = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
+        val name = exportPackName
+        exportPackName = null
+        if (uri != null && name != null) {
+            runCatching {
+                val source = File(runtimeStorage.imports, name)
+                require(source.isFile) { "O pacote não existe mais no armazenamento privado." }
+                context.contentResolver.openOutputStream(uri, "w").use { output ->
+                    requireNotNull(output) { "Não foi possível criar o arquivo de exportação." }.use { target ->
+                        source.inputStream().use { input -> input.copyTo(target) }
+                    }
+                }
+            }.onSuccess { message = "Pacote exportado: $name" }
+             .onFailure { message = "Falha ao exportar pacote: ${it.message ?: "erro desconhecido"}" }
+        }
+    }
+
+    LaunchedEffect(runtimeStorage) {
+        importedPacks = runtimeStorage.imports.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted().orEmpty()
+    }
+
     val importPack = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
             runCatching {
@@ -171,8 +197,8 @@ private fun LauncherApp() {
                         out.outputStream().use { target -> source.copyTo(target) }
                     }
                 }
-                importedPacks = (importedPacks + out.name).distinct()
-                message = "Pacote importado para o armazenamento privado do launcher."
+                importedPacks = runtimeStorage.imports.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted().orEmpty()
+                message = "Pacote guardado no armazenamento persistente do Laux. Importar ainda não ativa o pacote dentro do Minecraft."
             }.onFailure { message = "Falha ao importar: ${it.message ?: "erro desconhecido"}" }
         }
     }
@@ -183,9 +209,12 @@ private fun LauncherApp() {
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-                Box(Modifier.size(34.dp).background(Accent, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color.Black)
-                }
+                Image(
+                    painter = painterResource(id = R.drawable.ic_laux_launcher),
+                    contentDescription = "Ícone do Laux",
+                    modifier = Modifier.size(36.dp),
+                    contentScale = ContentScale.Fit
+                )
                 Column {
                     Text("BEDROCK", fontWeight = FontWeight.Black, fontSize = 14.sp, color = Color.White)
                     Text("LAUNCHER", fontSize = 10.sp, color = Accent, letterSpacing = 2.sp)
@@ -204,14 +233,14 @@ private fun LauncherApp() {
                 }
             }
             Spacer(Modifier.weight(1f))
-            Text("VERSÃO INICIAL • 0.1", color = Muted, fontSize = 10.sp)
+            Text("LAUX • 0.116", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
         }
 
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(page.label.uppercase(), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text("Seu espaço para jogar e organizar conteúdo", color = Muted, fontSize = 12.sp)
+                    Text(page.label.uppercase(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                    Text("Seu espaço para jogar e organizar conteúdo", color = Muted, fontSize = 11.sp)
                 }
                 Surface(color = SurfaceDark, shape = RoundedCornerShape(50)) {
                     Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -235,6 +264,7 @@ private fun LauncherApp() {
                                     activity,
                                     org.levimc.launcher.ui.activities.MainActivity::class.java
                                 ).putExtra("LAUNCH_WITH_URI", true)
+                                    .putExtra("LAUX_LAUNCH_ONLY", true)
                                 activity.startActivity(launchIntent)
                                 activity.finish()
                             }.onFailure { error ->
@@ -248,6 +278,9 @@ private fun LauncherApp() {
                 )
                 LauncherPage.MODS -> ModsPage(importedPacks, onImport = {
                     importPack.launch(arrayOf("*/*"))
+                }, onExport = { name ->
+                    exportPackName = name
+                    exportPack.launch(name)
                 }, onMessage = { message = it })
                 LauncherPage.WORLDS -> InfoPage(
                     icon = Icons.Default.Public,
@@ -292,6 +325,7 @@ private fun LauncherApp() {
                     onStageRuntimeApk = { importRuntimeApk.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream", "*/*")) },
                     onInspectRuntime = {
                         val report = runtimeCompatibility.inspect()
+                        installed = report.officialMinecraftInstalled
                         compatibilitySummary = buildString {
                             append("Android API ${report.androidSdk} • ABI: ${report.supportedAbis.joinToString().ifBlank { "não detectada" }} • ")
                             append(if (report.officialMinecraftInstalled) "Minecraft instalado" else "Minecraft oficial não encontrado")
@@ -315,20 +349,25 @@ private fun HomePage(onPlay: () -> Unit, onMods: () -> Unit, onWorlds: () -> Uni
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("SUA PRÓXIMA AVENTURA", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                Text("Minecraft Bedrock", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
-                Text("Jogue, organize seus pacotes e mantenha seus dados sob controle.", color = Muted, fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Image(painter = painterResource(id = R.drawable.ic_laux_launcher), contentDescription = null, modifier = Modifier.size(26.dp), contentScale = ContentScale.Fit)
+                    Text("SUA PRÓXIMA AVENTURA", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+                }
+                Text("Minecraft Bedrock", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text("Jogue e organize seus pacotes em um só lugar.", color = Muted, fontSize = 12.sp)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = onPlay, modifier = Modifier.height(44.dp), colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.Black), shape = RoundedCornerShape(13.dp)) {
+                Button(onClick = onPlay, modifier = Modifier.height(46.dp), colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF101313)), shape = RoundedCornerShape(13.dp), contentPadding = PaddingValues(horizontal = 17.dp, vertical = 8.dp)) {
+                    Image(painter = painterResource(id = R.drawable.ic_laux_launcher), contentDescription = null, modifier = Modifier.size(25.dp), contentScale = ContentScale.Fit)
+                    Spacer(Modifier.width(8.dp))
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(7.dp))
-                    Text("JOGAR", fontWeight = FontWeight.Black)
+                    Spacer(Modifier.width(4.dp))
+                    Text("JOGAR", fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 0.4.sp)
                 }
                 OutlinedButton(onClick = onMods, modifier = Modifier.height(44.dp), shape = RoundedCornerShape(13.dp)) {
                     Icon(Icons.Default.Extension, contentDescription = null)
                     Spacer(Modifier.width(7.dp))
-                    Text("GERENCIAR MODS")
+                    Text("GERENCIAR MODS", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -357,14 +396,14 @@ private fun QuickCard(
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Text(subtitle, color = Muted, fontSize = 11.sp)
+            Text(subtitle, color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
         }
         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Muted)
     }
 }
 
 @Composable
-private fun ModsPage(importedPacks: List<String>, onImport: () -> Unit, onMessage: (String) -> Unit) {
+private fun ModsPage(importedPacks: List<String>, onImport: () -> Unit, onExport: (String) -> Unit, onMessage: (String) -> Unit) {
     Column(Modifier.fillMaxSize().background(SurfaceDark, RoundedCornerShape(18.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -392,12 +431,14 @@ private fun ModsPage(importedPacks: List<String>, onImport: () -> Unit, onMessag
                         Icon(Icons.Default.Inventory2, contentDescription = null, tint = Accent)
                         Spacer(Modifier.width(10.dp))
                         Text(pack, color = Color.White, modifier = Modifier.weight(1f))
-                        Text("Importado", color = Muted, fontSize = 11.sp)
+                        IconButton(onClick = { onExport(pack) }) {
+                            Icon(Icons.Default.FileDownload, contentDescription = "Exportar $pack", tint = Accent)
+                        }
                     }
                 }
             }
         }
-        Text("Importar não ativa o pacote no Minecraft. A ativação e a validação de compatibilidade serão implementadas separadamente.", color = Color(0xFFFFD27D), fontSize = 11.sp)
+        Text("Os pacotes ficam salvos no Laux e podem ser exportados. A importação ainda não instala nem ativa automaticamente o conteúdo no Minecraft.", color = Color(0xFFFFD27D), fontSize = 10.sp, lineHeight = 14.sp)
     }
 }
 

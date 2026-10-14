@@ -118,20 +118,31 @@ import okhttp3.OkHttpClient;
     private OnBackPressedCallback onBackPressedCallback;
     private boolean launcherInitialized;
     private boolean postEulaFlowRunning;
+    // Laux launch-only mode: reuse the original launch engine without showing its UI.
+    private boolean lauxLaunchOnly;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        lauxLaunchOnly = getIntent() != null && getIntent().getBooleanExtra("LAUX_LAUNCH_ONLY", false);
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        if (lauxLaunchOnly) {
+            // Keep the view hierarchy alive because the existing launch pipeline depends on it,
+            // but do not expose the reference launcher's interface to Laux users.
+            binding.getRoot().setVisibility(View.INVISIBLE);
+            getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
         closeLauncherRestartAfterFirstDraw();
         setupNavBar();
         setupManagersAndHandlers();
-        if (!isInstanceShortcutIntent()) {
+        if (!lauxLaunchOnly && !isInstanceShortcutIntent()) {
             new GithubReleaseUpdater(this, "LiteLDev", "LeviLaunchroid", permissionResultLauncher).checkUpdateOnLaunch();
         }
-        showEulaIfNeeded();
-        setupOnBackPressedCallback();
+        if (!lauxLaunchOnly) {
+            showEulaIfNeeded();
+            setupOnBackPressedCallback();
+        }
 
         accountLoginLauncher = registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(), result -> {
             if (result.getResultCode() == RESULT_OK && result.getData() != null
@@ -144,8 +155,14 @@ import okhttp3.OkHttpClient;
             refreshNavAccountUI();
         });
 
-        initAccountHeader();
-        binding.getRoot().post(this::showPostEulaFlow);
+        if (!lauxLaunchOnly) {
+            initAccountHeader();
+            binding.getRoot().post(this::showPostEulaFlow);
+        } else {
+            // The hidden launch host must initialize the same managers as the full launcher.
+            // Without this branch VersionManager is never created and LAUNCH_WITH_URI is ignored.
+            binding.getRoot().post(this::initializeLauncher);
+        }
     }
 
     @Override
@@ -819,11 +836,16 @@ import okhttp3.OkHttpClient;
         if (version == null) {
             trace.warning("Launch cancelled", "No version selected");
             binding.launchButton.setEnabled(true);
-            new CustomAlertDialog(this)
-                    .setTitleText(getString(R.string.dialog_title_no_version))
-                    .setMessage(getString(R.string.dialog_message_no_version))
-                    .setPositiveButton(getString(R.string.dialog_positive_ok), null)
-                    .show();
+            if (lauxLaunchOnly) {
+                Toast.makeText(this, getString(R.string.dialog_message_no_version), Toast.LENGTH_LONG).show();
+                finish();
+            } else {
+                new CustomAlertDialog(this)
+                        .setTitleText(getString(R.string.dialog_title_no_version))
+                        .setMessage(getString(R.string.dialog_message_no_version))
+                        .setPositiveButton(getString(R.string.dialog_positive_ok), null)
+                        .show();
+            }
             return;
         }
 
@@ -834,14 +856,19 @@ import okhttp3.OkHttpClient;
             if (!loggedIn) {
                 trace.warning("Launch cancelled", "Minecraft account is missing");
                 binding.launchButton.setEnabled(true);
-                new CustomAlertDialog(this)
-                        .setTitleText(getString(R.string.dialog_title_login_required))
-                        .setMessage(getString(R.string.dialog_message_login_required))
-                        .setPositiveButton(getString(R.string.go_to_accounts), v -> {
-                            startActivity(new Intent(this, AccountsActivity.class));
-                        })
-                        .setNegativeButton(getString(R.string.disable_launcher_login_and_continue), null)
-                        .show();
+                if (lauxLaunchOnly) {
+                    Toast.makeText(this, getString(R.string.dialog_message_login_required), Toast.LENGTH_LONG).show();
+                    finish();
+                } else {
+                    new CustomAlertDialog(this)
+                            .setTitleText(getString(R.string.dialog_title_login_required))
+                            .setMessage(getString(R.string.dialog_message_login_required))
+                            .setPositiveButton(getString(R.string.go_to_accounts), v -> {
+                                startActivity(new Intent(this, AccountsActivity.class));
+                            })
+                            .setNegativeButton(getString(R.string.disable_launcher_login_and_continue), null)
+                            .show();
+                }
                 return;
             }
         }
@@ -849,7 +876,12 @@ import okhttp3.OkHttpClient;
         if (!PlayStoreValidator.isMinecraftFromPlayStore(this)) {
             trace.warning("Launch cancelled", "Minecraft is not verified as Play Store install");
             binding.launchButton.setEnabled(true);
-            PlayStoreValidationDialog.showNotFromPlayStoreDialog(this);
+            if (lauxLaunchOnly) {
+                Toast.makeText(this, "A instalação do Minecraft não passou na validação do launcher.", Toast.LENGTH_LONG).show();
+                finish();
+            } else {
+                PlayStoreValidationDialog.showNotFromPlayStoreDialog(this);
+            }
             return;
         }
 
@@ -870,12 +902,20 @@ import okhttp3.OkHttpClient;
                     trace.error("Launch failed before loading screen", e.getMessage());
                     runOnUiThread(() -> {
                         if (binding != null) binding.launchButton.setEnabled(true);
+                        if (lauxLaunchOnly) Toast.makeText(MainActivity.this,
+                                "Falha ao iniciar Minecraft: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()),
+                                Toast.LENGTH_LONG).show();
                     });
                 }
             });
         } catch (Exception e) {
             trace.error("Launch failed before activity start", e.getMessage());
             binding.launchButton.setEnabled(true);
+            if (lauxLaunchOnly) {
+                Toast.makeText(this, "Falha ao iniciar Minecraft: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()), Toast.LENGTH_LONG).show();
+                finish();
+                return;
+            }
             new CustomAlertDialog(this)
                     .setTitleText(getString(R.string.dialog_title_launch_failed))
                     .setMessage(getString(R.string.dialog_message_launch_failed, e.getMessage()))
